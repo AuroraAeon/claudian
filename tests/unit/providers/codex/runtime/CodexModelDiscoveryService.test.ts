@@ -77,11 +77,16 @@ describe('CodexModelDiscoveryService', () => {
       platformOs: 'linux',
     });
     mockResolveLaunchSpec.mockReturnValue({
+      target: {
+        method: 'host-native',
+        platformFamily: 'unix',
+        platformOs: 'linux',
+      },
       targetCwd: '/workspace',
       command: 'codex',
       args: ['app-server', '--listen', 'stdio://'],
       spawnCwd: '/workspace',
-      env: {},
+      env: { HOME: '/home/fallback' },
       pathMapper: { toHostPath: (value: string) => value },
     });
   });
@@ -284,6 +289,62 @@ describe('CodexModelDiscoveryService', () => {
       'step-5-preview',
     ]);
     expect(mockReadConfiguredModels).toHaveBeenCalledWith({ codexHome: '/home/user/.codex' });
+  });
+
+  it('falls back to the HOME-derived Codex home when the app-server omits codexHome', async () => {
+    mockInitializeTransport.mockResolvedValueOnce({
+      userAgent: 'test/0.1',
+      platformFamily: 'unix',
+      platformOs: 'linux',
+    });
+    mockTransportRequest.mockResolvedValueOnce({
+      data: [makeWireModel('gpt-6-astra', true)],
+      nextCursor: null,
+    });
+    mockReadConfiguredModels.mockResolvedValueOnce(null);
+
+    const result = await new CodexModelDiscoveryService(createPlugin()).discoverModels();
+
+    expect(result.kind).toBe('completed');
+    if (result.kind !== 'completed') {
+      throw new Error('Expected completed Codex model discovery');
+    }
+    expect(result.models.map(model => model.model)).toEqual(['gpt-6-astra']);
+    expect(mockReadConfiguredModels).toHaveBeenCalledWith({ codexHome: '/home/fallback/.codex' });
+  });
+
+  it('keeps the app-server catalog when no Codex home can be resolved', async () => {
+    mockResolveLaunchSpec.mockReturnValueOnce({
+      target: {
+        method: 'host-native',
+        platformFamily: 'unix',
+        platformOs: 'linux',
+      },
+      targetCwd: '/workspace',
+      command: 'codex',
+      args: ['app-server', '--listen', 'stdio://'],
+      spawnCwd: '/workspace',
+      env: {},
+      pathMapper: { toHostPath: (value: string) => value },
+    });
+    mockInitializeTransport.mockResolvedValueOnce({
+      userAgent: 'test/0.1',
+      platformFamily: 'unix',
+      platformOs: 'linux',
+    });
+    mockTransportRequest.mockResolvedValueOnce({
+      data: [makeWireModel('gpt-6-astra', true)],
+      nextCursor: null,
+    });
+
+    const result = await new CodexModelDiscoveryService(createPlugin()).discoverModels();
+
+    expect(result.kind).toBe('completed');
+    if (result.kind !== 'completed') {
+      throw new Error('Expected completed Codex model discovery');
+    }
+    expect(result.models.map(model => model.model)).toEqual(['gpt-6-astra']);
+    expect(mockReadConfiguredModels).not.toHaveBeenCalled();
   });
 
   it('keeps the app-server catalog when the Codex config cannot be read', async () => {

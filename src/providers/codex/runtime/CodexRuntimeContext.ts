@@ -33,7 +33,7 @@ function normalizeOptionalTargetPath(
   return trimmed ? normalizeTargetPath(launchSpec, trimmed) : null;
 }
 
-function resolveFallbackCodexHomeTarget(launchSpec: CodexLaunchSpec): string | null {
+export function resolveFallbackCodexHomeTarget(launchSpec: CodexLaunchSpec): string | null {
   const rawCodexHome = typeof launchSpec.env.CODEX_HOME === 'string'
     ? launchSpec.env.CODEX_HOME.trim()
     : '';

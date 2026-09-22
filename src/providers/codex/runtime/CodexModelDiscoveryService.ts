@@ -18,6 +18,7 @@ import {
 } from './CodexConfiguredModels';
 import type { CodexLaunchSpec } from './codexLaunchTypes';
 import { CodexRpcTransport } from './CodexRpcTransport';
+import { resolveFallbackCodexHomeTarget } from './CodexRuntimeContext';
 
 export type CodexModelDiscoveryResult =
   | {
@@ -46,12 +47,13 @@ export class CodexModelDiscoveryService implements CodexModelDiscoveryServiceLik
     launchSpec: CodexLaunchSpec,
     initializeResult: InitializeResult,
   ): Promise<CodexConfiguredProviderModels | null> {
-    const codexHome = initializeResult.codexHome?.trim();
-    if (!codexHome) {
+    const codexHomeTarget = initializeResult.codexHome?.trim()
+      || resolveFallbackCodexHomeTarget(launchSpec);
+    if (!codexHomeTarget) {
       return null;
     }
 
-    const codexHomeHost = launchSpec.pathMapper.toHostPath(codexHome);
+    const codexHomeHost = launchSpec.pathMapper.toHostPath(codexHomeTarget);
     if (!codexHomeHost) {
       return null;
     }
