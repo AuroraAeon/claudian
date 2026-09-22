@@ -137,6 +137,12 @@ Either:
 1. Install the native binary (recommended).
 2. Add the Node.js path in Settings → Environment: `PATH=/path/to/node/bin`.
 
+### Codex does not list models from alternative endpoints
+
+Codex reports its built-in OpenAI catalog even when `config.toml` routes requests to an alternative endpoint, for example a provider switched by [CC Switch](https://github.com/farion1231/cc-switch) or a manually configured `model_providers` entry. When the active `model_provider` points at a non-OpenAI `base_url`, Claudian reads the configured `model` from the Codex config (`$CODEX_HOME/config.toml`, default `~/.codex/config.toml`) and lists it first in the Codex model picker, so the model Codex actually uses stays selectable. The catalog refreshes when the provider, endpoint, or model changes.
+
+Models served by the endpoint that are not configured as `model` can be added in Settings → Codex → Custom models, one model ID per line.
+
 ### More help
 
 For provider-specific installation and configuration guidance, refer to the provider documentation linked in the [Requirements](#requirements) section. If you have a feature request or run into a bug, please [submit a GitHub issue](https://github.com/YishenTu/claudian/issues).

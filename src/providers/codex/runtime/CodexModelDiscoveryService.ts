@@ -10,7 +10,13 @@ import {
   initializeCodexAppServerTransport,
   resolveCodexAppServerLaunchSpec,
 } from './codexAppServerSupport';
-import type { ModelListResult } from './codexAppServerTypes';
+import type { InitializeResult, ModelListResult } from './codexAppServerTypes';
+import type { CodexConfiguredProviderModels } from './CodexConfiguredModels';
+import {
+  mergeCodexConfiguredModels,
+  readCodexConfiguredProviderModels,
+} from './CodexConfiguredModels';
+import type { CodexLaunchSpec } from './codexLaunchTypes';
 import { CodexRpcTransport } from './CodexRpcTransport';
 
 export type CodexModelDiscoveryResult =
@@ -35,6 +41,27 @@ const MODEL_LIST_PAGE_SIZE = 100;
 
 export class CodexModelDiscoveryService implements CodexModelDiscoveryServiceLike {
   constructor(private readonly plugin: ProviderHost) {}
+
+  private async readConfiguredProviderModels(
+    launchSpec: CodexLaunchSpec,
+    initializeResult: InitializeResult,
+  ): Promise<CodexConfiguredProviderModels | null> {
+    const codexHome = initializeResult.codexHome?.trim();
+    if (!codexHome) {
+      return null;
+    }
+
+    const codexHomeHost = launchSpec.pathMapper.toHostPath(codexHome);
+    if (!codexHomeHost) {
+      return null;
+    }
+
+    try {
+      return await readCodexConfiguredProviderModels({ codexHome: codexHomeHost });
+    } catch {
+      return null;
+    }
+  }
 
   async discoverModels(
     signal?: AbortSignal,
@@ -82,7 +109,7 @@ export class CodexModelDiscoveryService implements CodexModelDiscoveryServiceLik
       };
       signal?.addEventListener('abort', abortListener, { once: true });
 
-      await initializeCodexAppServerTransport(transport);
+      const initializeResult = await initializeCodexAppServerTransport(transport);
 
       if (signal?.aborted) {
         return {
@@ -123,9 +150,24 @@ export class CodexModelDiscoveryService implements CodexModelDiscoveryServiceLik
         }
       } while (cursor);
 
+      const appServerModels = normalizeCodexDiscoveredModels(entries);
+      const configuredProviderModels = await this.readConfiguredProviderModels(
+        launchSpec,
+        initializeResult,
+      );
+      if (signal?.aborted) {
+        return {
+          kind: 'completed',
+          diagnostics: 'Codex model discovery was cancelled',
+          models: [],
+        };
+      }
+
       return {
         kind: 'completed',
-        models: normalizeCodexDiscoveredModels(entries),
+        models: configuredProviderModels
+          ? mergeCodexConfiguredModels(configuredProviderModels, appServerModels)
+          : appServerModels,
       };
     } catch (error) {
       if (signal?.aborted) {

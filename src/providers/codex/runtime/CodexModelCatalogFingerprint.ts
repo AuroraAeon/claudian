@@ -2,26 +2,33 @@
  * Cache fingerprint for the Codex model catalog.
  *
  * The fingerprint captures the inputs that affect which models the Codex
- * app-server will report. When any input changes, the cached catalog is
+ * app-server will report, plus the third-party provider configured in the
+ * local Codex config. When any input changes, the cached catalog is
  * considered stale and will be refreshed.
  */
 
 import { createHash } from 'node:crypto';
+import * as os from 'node:os';
 
-import { getRuntimeEnvironmentText } from '../../../core/providers/providerEnvironment';
+import { getRuntimeEnvironmentText, getRuntimeEnvironmentVariables } from '../../../core/providers/providerEnvironment';
 import type { ProviderHost } from '../../../core/providers/ProviderHost';
 import type { ProviderTransitionOwnerContext } from '../../../core/providers/types';
 import { getVaultPath } from '../../../utils/path';
 import { computeCodexEnvHash } from '../env/CodexSettingsReconciler';
 import { getCodexProviderSettings } from '../settings';
+import {
+  readCodexConfiguredProviderModels,
+  resolveCodexConfigHome,
+} from './CodexConfiguredModels';
 import { resolveCodexExecutionTargetAsync } from './CodexExecutionTargetResolver';
 
-const CATALOG_FINGERPRINT_VERSION = '2';
+const CATALOG_FINGERPRINT_VERSION = '3';
 
 export interface CodexCatalogFingerprintInputs {
   resolvedCliCommand: string | null;
   executionTargetKey: string;
   envHash: string;
+  providerSignature?: string;
 }
 
 export function buildCodexCatalogFingerprint(
@@ -32,6 +39,7 @@ export function buildCodexCatalogFingerprint(
     inputs.resolvedCliCommand ?? '',
     inputs.executionTargetKey,
     inputs.envHash,
+    inputs.providerSignature ?? '',
   ];
   return `${CATALOG_FINGERPRINT_VERSION}:${createHash('sha256')
     .update(JSON.stringify(parts))
@@ -60,12 +68,35 @@ export async function computeCodexCatalogFingerprint(
   ].join(':');
   const envText = getRuntimeEnvironmentText(settings, 'codex');
   const envHash = computeCodexEnvHash(envText);
+  const providerSignature = await computeCodexProviderSignature(settings);
 
   return buildCodexCatalogFingerprint({
     resolvedCliCommand,
     executionTargetKey,
     envHash,
+    providerSignature,
   });
+}
+
+async function computeCodexProviderSignature(
+  settings: Record<string, unknown>,
+): Promise<string> {
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    ...getRuntimeEnvironmentVariables(settings, 'codex'),
+  };
+  const configuredProviderModels = await readCodexConfiguredProviderModels({
+    codexHome: resolveCodexConfigHome(env, os.homedir()),
+  });
+  if (!configuredProviderModels) {
+    return '';
+  }
+
+  return [
+    configuredProviderModels.providerId,
+    configuredProviderModels.baseUrl,
+    configuredProviderModels.models.map(model => model.model).join(','),
+  ].join(':');
 }
 
 export function getCodexCatalogFingerprintFromSettings(

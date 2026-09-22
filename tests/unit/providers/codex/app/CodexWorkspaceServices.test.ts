@@ -17,6 +17,12 @@ jest.mock('@/providers/codex/runtime/CodexModelDiscoveryService', () => ({
   })),
 }));
 
+const mockReadConfiguredModels = jest.fn().mockResolvedValue(null);
+jest.mock('@/providers/codex/runtime/CodexConfiguredModels', () => ({
+  ...jest.requireActual('@/providers/codex/runtime/CodexConfiguredModels'),
+  readCodexConfiguredProviderModels: (...args: unknown[]) => mockReadConfiguredModels(...args),
+}));
+
 jest.mock('@/providers/codex/commands/CodexSkillCatalog', () => ({
   CodexSkillCatalog: jest.fn(),
 }));

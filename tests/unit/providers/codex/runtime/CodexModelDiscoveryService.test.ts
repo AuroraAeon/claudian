@@ -8,6 +8,7 @@ const mockProcessShutdown = jest.fn().mockResolvedValue(undefined);
 const mockProcessStderr = jest.fn().mockReturnValue('');
 const mockResolveLaunchSpec = jest.fn();
 const mockInitializeTransport = jest.fn();
+const mockReadConfiguredModels = jest.fn();
 
 jest.mock('@/providers/codex/runtime/CodexRpcTransport', () => ({
   CodexRpcTransport: jest.fn().mockImplementation(() => ({
@@ -29,6 +30,11 @@ jest.mock('@/providers/codex/runtime/CodexAppServerProcess', () => ({
 jest.mock('@/providers/codex/runtime/codexAppServerSupport', () => ({
   initializeCodexAppServerTransport: (...args: unknown[]) => mockInitializeTransport(...args),
   resolveCodexAppServerLaunchSpec: (...args: unknown[]) => mockResolveLaunchSpec(...args),
+}));
+
+jest.mock('@/providers/codex/runtime/CodexConfiguredModels', () => ({
+  ...jest.requireActual('@/providers/codex/runtime/CodexConfiguredModels'),
+  readCodexConfiguredProviderModels: (...args: unknown[]) => mockReadConfiguredModels(...args),
 }));
 
 function makeWireModel(model: string, isDefault = false) {
@@ -63,6 +69,7 @@ function createPlugin(enabled = true) {
 describe('CodexModelDiscoveryService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReadConfiguredModels.mockResolvedValue(null);
     mockInitializeTransport.mockResolvedValue({
       userAgent: 'test/0.1',
       codexHome: '/home/user/.codex',
@@ -75,6 +82,7 @@ describe('CodexModelDiscoveryService', () => {
       args: ['app-server', '--listen', 'stdio://'],
       spawnCwd: '/workspace',
       env: {},
+      pathMapper: { toHostPath: (value: string) => value },
     });
   });
 
@@ -234,5 +242,64 @@ describe('CodexModelDiscoveryService', () => {
     });
     expect(mockProcessStart).not.toHaveBeenCalled();
     expect(mockTransportStart).not.toHaveBeenCalled();
+  });
+
+  it('offers the configured model when Codex points at a third-party provider', async () => {
+    mockTransportRequest.mockResolvedValueOnce({
+      data: [makeWireModel('gpt-6-astra', true), makeWireModel('gpt-5.6-sol')],
+      nextCursor: null,
+    });
+    mockReadConfiguredModels.mockResolvedValueOnce({
+      providerId: 'custom',
+      baseUrl: 'https://api.stepfun.com/step_plan/v1',
+      models: [{
+        model: 'step-5-preview',
+        displayName: 'step-5-preview',
+        description: 'Configured model for Codex provider "custom"',
+        supportedReasoningEfforts: [
+          { value: 'low', description: '' },
+          { value: 'medium', description: '' },
+          { value: 'high', description: '' },
+        ],
+        defaultReasoningEffort: 'high',
+        serviceTiers: [],
+        defaultServiceTier: null,
+        inputModalities: ['text', 'image'],
+        isDefault: true,
+      }],
+    });
+
+    const result = await new CodexModelDiscoveryService(createPlugin()).discoverModels();
+
+    expect(result.kind).toBe('completed');
+    if (result.kind !== 'completed') {
+      throw new Error('Expected completed Codex model discovery');
+    }
+    expect(result.models.map(model => model.model)).toEqual([
+      'step-5-preview',
+      'gpt-6-astra',
+      'gpt-5.6-sol',
+    ]);
+    expect(result.models.filter(model => model.isDefault).map(model => model.model)).toEqual([
+      'step-5-preview',
+    ]);
+    expect(mockReadConfiguredModels).toHaveBeenCalledWith({ codexHome: '/home/user/.codex' });
+  });
+
+  it('keeps the app-server catalog when the Codex config cannot be read', async () => {
+    mockTransportRequest.mockResolvedValueOnce({
+      data: [makeWireModel('gpt-6-astra', true)],
+      nextCursor: null,
+    });
+    mockReadConfiguredModels.mockRejectedValueOnce(new Error('EACCES'));
+
+    const result = await new CodexModelDiscoveryService(createPlugin()).discoverModels();
+
+    expect(result.kind).toBe('completed');
+    if (result.kind !== 'completed') {
+      throw new Error('Expected completed Codex model discovery');
+    }
+    expect(result.models.map(model => model.model)).toEqual(['gpt-6-astra']);
+    expect(result.diagnostics).toBeUndefined();
   });
 });

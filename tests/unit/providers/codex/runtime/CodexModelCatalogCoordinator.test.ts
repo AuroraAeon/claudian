@@ -18,6 +18,12 @@ jest.mock('@/core/providers/ProviderSettingsCoordinator', () => ({
   },
 }));
 
+const mockReadConfiguredModels = jest.fn();
+jest.mock('@/providers/codex/runtime/CodexConfiguredModels', () => ({
+  ...jest.requireActual('@/providers/codex/runtime/CodexConfiguredModels'),
+  readCodexConfiguredProviderModels: (...args: unknown[]) => mockReadConfiguredModels(...args),
+}));
+
 function makeModel(model: string, displayName = model): CodexDiscoveredModel {
   return {
     model,
@@ -179,11 +185,12 @@ function deferConditionalMutations(host: ProviderHost, count: number): {
 describe('CodexModelCatalogCoordinator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReadConfiguredModels.mockResolvedValue(null);
   });
 
   it('does not expose environment secrets in the catalog fingerprint', () => {
     expect(FAKE_FINGERPRINT).not.toContain('secret');
-    expect(FAKE_FINGERPRINT).toMatch(/^2:[a-f0-9]{64}$/);
+    expect(FAKE_FINGERPRINT).toMatch(/^3:[a-f0-9]{64}$/);
   });
 
   it('returns cached models immediately when cache is fresh', async () => {
