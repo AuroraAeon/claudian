@@ -56,15 +56,11 @@ export function isOfficialCodexProviderBaseUrl(baseUrl: string): boolean {
   return OFFICIAL_CODEX_PROVIDER_HOSTS.has(hostname);
 }
 
-function createConfiguredModel(
-  model: string,
-  providerId: string,
-  baseUrl: string,
-): CodexDiscoveredModel {
+function createConfiguredModel(model: string, providerId: string): CodexDiscoveredModel {
   return {
     model,
     displayName: formatCodexModelLabel(model),
-    description: `Configured model for Codex provider "${providerId}" (${baseUrl})`,
+    description: `Configured model for Codex provider "${providerId}"`,
     supportedReasoningEfforts: CODEX_FALLBACK_REASONING_EFFORT_VALUES.map(value => ({
       value,
       description: '',
@@ -118,7 +114,7 @@ export function parseCodexConfiguredProviderModels(
   return {
     providerId,
     baseUrl,
-    models: [createConfiguredModel(model, providerId, baseUrl)],
+    models: [createConfiguredModel(model, providerId)],
   };
 }
 

@@ -117,6 +117,8 @@ base_url = "https://api.stepfun.com/step_plan/v1"
       'max',
     ]);
     expect(model.defaultReasoningEffort).toBe('high');
+    expect(model.description).toContain('custom');
+    expect(model.description).not.toContain('https://api.stepfun.com/step_plan/v1');
   });
 
   it('treats local proxy endpoints as third-party providers', () => {
